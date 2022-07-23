@@ -2,10 +2,9 @@ from requests import delete
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from video.models import Video
-from .serializers import ItemSerializer, VideoSerializer
+from .serializers import VideoSerializer
 from moviepy.editor import VideoFileClip
 from django.conf import settings
-from django.conf.urls.static import static
 import os
 
 @api_view(['GET'])
