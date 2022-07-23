@@ -63,24 +63,14 @@ def addItem(request):
 @api_view(['POST'])
 def charge(request):
 
-    serializer = VideoSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-    main_file = str(settings.BASE_DIR) + serializer.data["video"]
-
-    # Calculating size of video
-    size = os.path.getsize(main_file)/(1024*1024)
-
-    # Calculating length of video
-    video_clip = VideoFileClip(main_file)
-    duration = video_clip.duration
+     # Getting inputed data
+    size = int(request.POST["size"])
+    duration = int(request.POST["duration"])
 
     # Calculating charges
     charge = 0
     charge += 6 if size<500 else 12.5
     charge += 12.5 if duration<378 else 20
-
-    deleteObj(serializer)
 
     return Response({'charge': charge})
 
