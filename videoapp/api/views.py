@@ -1,4 +1,3 @@
-from requests import delete
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from video.models import Video
@@ -9,7 +8,13 @@ import os
 
 @api_view(['GET'])
 def getData(request):
-    videos = Video.objects.all()
+
+    # Filtering based on duration
+    if "min_duration" in request.GET and "max_duration" in request.GET:
+        videos = Video.objects.filter(duration__gte=request.GET["min_duration"], duration__lte=request.GET["max_duration"])
+    else:
+        videos = Video.objects.all()
+
     serializer = VideoSerializer(videos, many=True)
 
     return Response(serializer.data)
@@ -19,12 +24,9 @@ accepted_extension = ["mp4", "mkv"]
 @api_view(['POST'])
 def addItem(request):
 
-    # Deleting previous unwanted data
-    clean_up()
-
     # Checking video extension type
     if request.FILES["video"].name.split('.')[1] not in accepted_extension:
-        return Response("Video extension must be mp4 or mkv")
+        return Response({"message": "Video extension must be mp4 or mkv"})
 
     # Saving object
     serializer = VideoSerializer(data=request.data)
@@ -32,18 +34,55 @@ def addItem(request):
         serializer.save()
     main_file = str(settings.BASE_DIR) + serializer.data["video"]
 
-    # Calculating size of video
-    if os.path.getsize(main_file)/(1024*1024*1024) >= 1.0:
+    # Calculating size and duration of video
+    size = os.path.getsize(main_file)/(1024*1024)
+    video_clip = VideoFileClip(main_file)
+    duration = video_clip.duration
+
+    # Validating size
+    if size > 1024:
         deleteObj(serializer)
-        return Response("Video Size is more than 1 GB")
+        return Response({"message": "Video Size is more than 1 GB"})
+
+    # Validating length of video
+    if duration >= 600:
+        deleteObj(serializer)
+        return Response({"message": "Video length is more than 10 minute"})
+
+    # Update duration and size in database
+    video_obj  = Video.objects.get(pk=serializer.data["id"])
+    video_obj.size = size
+    video_obj.duration = duration
+    video_obj.save()
+
+    # Deleting previous unwanted data
+    clean_up()
+
+    return Response({"message": "Data successfully updated"})
+
+@api_view(['POST'])
+def charge(request):
+
+    serializer = VideoSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+    main_file = str(settings.BASE_DIR) + serializer.data["video"]
+
+    # Calculating size of video
+    size = os.path.getsize(main_file)/(1024*1024)
 
     # Calculating length of video
     video_clip = VideoFileClip(main_file)
-    if video_clip.duration >= 600:
-        deleteObj(serializer)
-        return Response("Video length is more than 10 minute")
+    duration = video_clip.duration
 
-    return Response("Data successfully updated")
+    # Calculating charges
+    charge = 0
+    charge += 6 if size<500 else 12.5
+    charge += 12.5 if duration<378 else 20
+
+    deleteObj(serializer)
+
+    return Response({'charge': charge})
 
 
 def deleteObj(serializer):
